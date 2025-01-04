@@ -1,0 +1,1 @@
+As discussed among members of the group, we have split the 30 notebooks of our dataset into 3 equal parts in order pick the best 3 notebooks that we will be working on to come up with the final model draft.
