@@ -1,0 +1,473 @@
+import numpy as np # linear algebra
+import pandas as pd # data processing, CSV file I/O (e.g. pd.read_csv)
+import matplotlib.pyplot as plt
+import seaborn as sns
+import plotly.express as px
+import plotly.graph_objects as go
+import os
+for dirname, _, filenames in os.walk('/kaggle/input'):
+    for filename in filenames:
+        print(os.path.join(dirname, filename))
+
+##DATA UNDERSTANDING
+
+df = pd.read_csv('/kaggle/input/usa-real-estate-dataset/realtor-data.zip.csv')
+df.head(10)
+
+df.shape
+df.info()
+df.describe()
+df.describe(include = 'object')
+
+##DATA PREPROCESSING
+
+df.duplicated().sum()
+df.drop_duplicates(inplace=True)
+total_missing = df.isna().sum()*100/len(df)
+print('Percentage Missing Value %')
+total_missing
+
+df['bed'].fillna(df['bed'].mode()[0], inplace=True)
+df['bath'].fillna(df['bath'].mode()[0], inplace=True)
+df['acre_lot'].fillna(df['acre_lot'].mode()[0], inplace=True)
+df['house_size'].fillna(df['house_size'].mode()[0], inplace=True)
+
+df = df.dropna(subset=['zip_code','city', 'price'])
+df = df.drop('prev_sold_date', axis=1)
+
+df.info()
+
+df.isnull().sum()
+
+column_num = ['bed','bath','acre_lot','house_size','price']
+plt.boxplot(df[column_num])
+plt.xticks([1, 2, 3, 4, 5], column_num)
+plt.title('Outlier Before Remove')
+plt.show()
+print(f'Total Row With Outlier: {df.shape[0]}')
+
+Q1 = df[column_num].quantile(0.25)
+Q3 = df[column_num].quantile(0.75)
+IQR = Q3 - Q1
+
+df = df[~((df[column_num] < (Q1 - 1.5 * IQR)) | (df[column_num] > (Q3 + 1.5 * IQR))).any(axis=1)]
+
+column_num = ['bed','bath','acre_lot','house_size','price']
+plt.boxplot(df[column_num])
+plt.xticks([1, 2, 3, 4, 5], column_num)
+plt.title('Outlier After Remove')
+plt.show()
+print(f'Total Row Without Outlier: {df.shape[0]}')
+
+df.describe()
+df.head()
+
+##EXPLORATORY DATA ANALYSIS
+
+sns.clustermap(
+    df.corr(),
+    annot=True,
+    cmap='mako',
+    figsize=(8, 8)
+)
+plt.show
+
+plt.figure(figsize=(10,10))
+ax = sns.countplot(data=df, x='bed')
+for i in ax.containers:
+  ax.bar_label(i,)
+plt.title('Distribution of Bed', fontsize=18)
+plt.show()
+
+plt.figure(figsize=(10,10))
+ax = sns.countplot(data=df, x='bath')
+for i in ax.containers:
+  ax.bar_label(i,)
+plt.title('Distribution of Bath', fontsize=18)
+plt.show()
+
+plt.subplots(figsize=(10,10))
+plt.xticks(rotation=90)
+sns.stripplot(y='bath', x='bed', data=df, marker='D', alpha=0.2)
+plt.title('Distribution of Bed depending on the Bath',fontsize = 20)
+plt.show()
+
+df.groupby('bed', as_index=False).agg({'bath' : 'mean'}).sort_values('bath', ascending=False)
+
+grouped = df.groupby(['bed', 'bath']).size().reset_index(name='count')
+
+pivot = grouped.pivot('bed', 'bath', 'count')
+
+sns.heatmap(pivot, cmap='YlGnBu', annot=True, fmt='g')
+
+sns.histplot(data=df, x="acre_lot")
+plt.title('Distribution of Acre Lot')
+plt.show()
+
+df['acre_lot'].value_counts()
+
+plt.subplots(figsize=(10,10))
+plt.xticks(rotation=90)
+sns.stripplot(y='acre_lot', x='bed', data=df, marker='D', alpha=0.5)
+plt.title('Distribution of Acre Lot depending on the Bed',fontsize = 20)
+plt.show()
+
+df.groupby('bed', as_index=False).agg({'acre_lot' : 'count'}).sort_values('bed', ascending=False)
+
+City = df['city'].value_counts().reset_index().rename(columns={'index': 'city', 'city': 'count'})
+top_5 = City[:5]
+fig = px.bar(top_5,'city', y='count', color='city', template='plotly')
+fig.update_layout(title='Distribution of Top 5 Cities with Most Houses')
+fig.update_traces(texttemplate='%{y:.}', textposition='outside')
+fig.show()
+
+top10 = df.groupby('city')['bed'].sum().nlargest(10).reset_index()
+
+fig = px.bar(top10, x='city', y='bed',color='bed', template='plotly', 
+             title='Top 10 Cities with the Most Total Beds')
+fig.update_traces(texttemplate='%{y:.}', textposition='outside')
+fig.show()
+
+top10 = df.groupby('city')['bath'].sum().nlargest(10).reset_index()
+
+fig = px.bar(top10, x='city', y='bath',color='bath', template='plotly', 
+             title='Top 10 Cities with the Most Total Bath')
+fig.update_traces(texttemplate='%{y:.}', textposition='outside')
+fig.show()
+
+df_mean = df.groupby('city')[['bed', 'bath']].mean().reset_index()
+
+df_mean_sort = df_mean.sort_values(by=['bed', 'bath'], ascending=False)
+
+top10 = df_mean_sort.head(10)
+
+fig = px.bar(top10, x='city', y=['bed', 'bath'], barmode='group',
+             color_discrete_sequence=['blue', 'orange'],
+             labels={'value': 'Mean Bed and Bath'},
+             title='Top 10 Cities with Highest Mean Bed and Bath')
+fig.show()
+
+top10 = df.groupby('city')['acre_lot'].sum().nlargest(10).reset_index()
+
+fig = px.bar(top10, x='city', y='acre_lot',color='city', template='plotly',
+             title='Top 10 Cities with Highest Most Acre Lot') 
+fig.update_traces(texttemplate='%{y:.2f}', textposition='outside')
+fig.show()
+
+df_mean = df.groupby('city')['acre_lot'].mean().reset_index()
+
+df_mean_sort = df_mean.sort_values(by='acre_lot', ascending=False)
+
+top10 = df_mean_sort.head(10)
+
+fig = px.bar(top10, x='city', y='acre_lot', color='acre_lot', template='plotly',
+             title='Top 10 Cities with Highest Mean Acre Lot')
+fig.update_layout(xaxis_title='City', yaxis_title='Mean Acre Lot')
+fig.update_traces(texttemplate='%{y:.2f}', textposition='outside')
+fig.show()
+
+fig = px.histogram(df, x='state', nbins=25, color='state', template='plotly')
+fig.update_layout(title='Distribution of State')
+fig.show()
+
+city_bed_count = df.groupby(['state', 'bed']).size().reset_index(name='count')
+
+fig = px.bar(city_bed_count, x='state', y='count', color='bed', barmode='stack',
+             title='Distribution of State with Bed')
+fig.show()
+
+df.groupby('state', as_index=False).agg({'bed' : 'mean'}).sort_values('bed', ascending=False)
+
+city_bed_count = df.groupby(['state', 'bath']).size().reset_index(name='count')
+
+fig = px.bar(city_bed_count, x='state', y='count', color='bath', barmode='stack',
+             title='Distribution of State with Bath')
+fig.show()
+
+df.groupby('state', as_index=False).agg({'bath' : 'mean'}).sort_values('bath', ascending=False)
+
+df.groupby('state', as_index=False).agg({'acre_lot' : 'mean'}).sort_values('acre_lot', ascending=False)
+
+fig = px.histogram(df, x='house_size', nbins=20)
+fig.update_layout(title='Distribution of House Size')
+fig.show()
+
+df['house_size'].value_counts()
+
+fig = px.histogram(df, x='house_size', color='bed', nbins=25, marginal='box', 
+                   labels={'house_size':'House Size (sqft)'}, 
+                   title='Distribution of House Size with Bed')
+
+fig.show()
+
+df.groupby('bed', as_index=False).agg({'house_size' : 'mean'}).sort_values('house_size', ascending=False)
+
+fig = px.histogram(df, x="house_size", color="bath", nbins=25, marginal="box")
+fig.update_layout(title="Distribution of House Size with Bath", xaxis_title="House Size", yaxis_title="Count")
+fig.show()
+
+df.groupby('bath', as_index=False).agg({'house_size' : 'mean'}).sort_values('house_size', ascending=False)
+
+fig = px.scatter(df, x='bed', y='bath', size='house_size', color='bed', opacity=1,
+                 marginal_x='histogram', marginal_y='histogram', 
+                 labels={'bed': 'Bedrooms', 'bath': 'Bathrooms', 'house_size': 'House Size'},
+                 title='Distribution of House Size by Bedrooms and Bathrooms')
+fig.show()
+
+fig = px.histogram(df, x='acre_lot', y='house_size', color='bed',
+                   marginal='box', nbins=20, opacity=0.7,
+                   title='Distribution of House Size by Acre Lot and Bed')
+fig.update_layout(xaxis_title='Acre Lot',
+                  yaxis_title='House Size (sqft)',
+                  legend_title='Bed')
+fig.show()
+
+fig = px.histogram(df, x='acre_lot', y='house_size', color='bath',
+                   marginal='box', nbins=20, opacity=0.7,
+                   title='Distribution of House Size by Acre Lot and Bath')
+fig.update_layout(xaxis_title='Acre Lot',
+                  yaxis_title='House Size (sqft)',
+                  legend_title='Bath')
+fig.show()
+
+df_mean = df.groupby('acre_lot')['house_size'].mean().reset_index()
+
+fig = px.scatter(df_mean, x='acre_lot', y='house_size', title='Average House Size by Acre Lot',trendline='ols')
+fig.show()
+
+df_mean = df.groupby('city')['house_size'].mean().reset_index()
+df_mean_sort = df_mean.sort_values(by='house_size', ascending=False)
+
+top10 = df_mean_sort.head(10)
+
+fig = px.bar(top10, x='city', y='house_size', color='house_size',
+             color_continuous_scale='RdYlBu_r')
+fig.update_layout(title='Top 10 Cities with Highest Mean House Size',
+                  xaxis_title='City', yaxis_title='Mean House Size')
+fig.update_traces(texttemplate='%{y:.2f}', textposition='outside')
+fig.show()
+
+df.groupby('city', as_index=False).agg({'house_size' : 'mean'}).sort_values('house_size', ascending=False)
+
+df_mean = df.groupby('state')['house_size'].mean().reset_index()
+
+df_mean_sort = df_mean.sort_values(by='house_size', ascending=False)
+
+fig = px.bar(df_mean_sort, x='state', y='house_size', color='state')
+fig.update_layout(title='Top 10 States with Highest Average House Size',
+                  xaxis_title='State',
+                  yaxis_title='Average House Size (sqft)')
+fig.update_traces(texttemplate='%{y:.1f}', textposition='outside')
+fig.show()
+
+df.groupby('state', as_index=False).agg({'house_size' : 'mean'}).sort_values('house_size', ascending=False)
+
+fig = px.histogram(df, x="price", nbins=25, template="plotly")
+fig.update_layout(title="Distribution of Price")
+fig.show()
+
+df['price'].value_counts()
+
+fig = px.histogram(df, x="price", color="bed", nbins=20)
+fig.update_layout(title="Distribution of Price by Bed", xaxis_title="Price", yaxis_title="Count")
+fig.show()
+
+df.groupby('bed', as_index=False).agg({'price' : 'mean'}).sort_values('price', ascending=False)
+
+fig = px.histogram(df, x="price", color="bath", nbins=20)
+fig.update_layout(title="Distribution of Price by Bath", xaxis_title="Price", yaxis_title="Count")
+fig.show()
+
+df.groupby('bath', as_index=False).agg({'price' : 'mean'}).sort_values('price', ascending=False)
+
+df_mean = df.groupby('acre_lot')['price'].mean().reset_index()
+
+# plot mean price per acre lot
+fig = px.scatter(df_mean, x='acre_lot', y='price', trendline='ols')
+fig.update_layout(title='Average Price per Acre Lot', xaxis_title='Acre Lot', yaxis_title='Price')
+fig.show()
+
+df_mean = df.groupby('city')['price'].mean().reset_index()
+
+df_mean_sort = df_mean.sort_values(by='price', ascending=False)
+
+top10 = df_mean_sort.head(10)
+
+fig = px.bar(top10, x='city', y='price', color='city',
+             labels={'city': 'City', 'price': 'Mean Price'},
+             title='Top 10 Cities with the Highest Average Price')
+fig.update_traces(texttemplate='%{y:.1f}', textposition='outside')
+fig.show()
+
+df.groupby('city', as_index=False).agg({'price' : 'mean'}).sort_values('price', ascending=False)
+
+df_mean = df.groupby('state')['price'].mean().reset_index()
+
+df_mean_sort = df_mean.sort_values(by='price', ascending=False)
+
+fig = px.bar(df_mean_sort, x='state', y='price',
+             title='Top 10 States with Highest Mean Price',
+             labels={'state': 'State', 'price': 'Mean Price'})
+fig.update_traces(texttemplate='%{y:.1f}', textposition='outside')
+fig.show()
+
+df.groupby('state', as_index=False).agg({'price' : 'mean'}).sort_values('price', ascending=False)
+
+df_mean = df.groupby('price')['house_size'].mean().reset_index()
+
+fig = px.scatter(df_mean, x='price', y='house_size', trendline='ols', 
+                 labels={'price':'Price', 'house_size':'Mean House Size'})
+fig.update_layout(title='Distribution of Mean House Size by Price')
+fig.show()
+
+fig = px.scatter(df, x='house_size', y='price', color='bed', size='bath',trendline='ols')
+fig.update_layout(title='House Size vs Price',
+                  xaxis_title='House Size',
+                  yaxis_title='Price')
+fig.show()
+
+  ##MODEL PREDICTING PRICE HOUSE
+  
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import RidgeCV, ElasticNetCV
+from sklearn.tree import DecisionTreeRegressor
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.ensemble import GradientBoostingRegressor
+from sklearn.preprocessing import OneHotEncoder, StandardScaler, MinMaxScaler
+from sklearn.metrics import r2_score, mean_squared_error, mean_absolute_error
+from sklearn.neighbors import KNeighborsRegressor
+df['house_size'] = StandardScaler().fit_transform(df['house_size'].values.reshape(len(df), 1))
+df['price'] = StandardScaler().fit_transform(df['price'].values.reshape(len(df), 1))
+df['bed'] = MinMaxScaler().fit_transform(df['bed'].values.reshape(len(df), 1))
+df['bath'] = MinMaxScaler().fit_transform(df['bath'].values.reshape(len(df), 1))
+df['acre_lot'] = MinMaxScaler().fit_transform(df['acre_lot'].values.reshape(len(df), 1))
+df.head()
+
+X = df[['bed', 'bath', 'acre_lot', 'house_size', 'city', 'state', 'zip_code']]
+y = df['price']
+
+# one-hot encode the categorical features
+X = pd.get_dummies(X, columns=['city', 'state', 'zip_code'])
+
+# split the data into training and testing sets
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+#create the decision tree model
+model_DT = DecisionTreeRegressor(max_depth=5)
+
+# fit the model to the training data
+model_DT.fit(X_train, y_train)
+
+# make predictions on the testing data
+y_pred = model_DT.predict(X_test)
+
+# calculate
+mse_DT = mean_squared_error(y_test, y_pred)
+rmse_DT = mean_squared_error(y_test, y_pred, squared=False)
+mae_DT = mean_absolute_error(y_test, y_pred)
+r2_DT = r2_score(y_test, y_pred)
+
+  # create a Random Forest model and train it using training data
+model_RF = RandomForestRegressor(n_estimators=100, random_state=42)
+model_RF.fit(X_train, y_train)
+
+# make predictions using testing data
+y_pred = model_RF.predict(X_test)
+
+# calculate the average error value using the MSE metric
+mse_RF = mean_squared_error(y_test, y_pred)
+rmse_RF = mean_squared_error(y_test, y_pred, squared=False)
+mae_RF = mean_absolute_error(y_test, y_pred)
+r2_RF = r2_score(y_test, y_pred)
+
+# Create a Gradient Boosting model and perform training on the training data
+model_GD = GradientBoostingRegressor(learning_rate=0.05,
+    n_estimators=150,
+    max_depth=3,
+    min_samples_split=4,
+    min_samples_leaf=1)
+model_GD.fit(X_train, y_train)
+
+# Make predictions on testing data
+y_pred = model_GD.predict(X_test)
+
+# Evaluate model performance
+mse_GD = mean_squared_error(y_test, y_pred)
+rmse_GD = mean_squared_error(y_test, y_pred, squared=False)
+mae_GD = mean_absolute_error(y_test, y_pred)
+r2_GD = r2_score(y_test, y_pred)
+
+ridge_cv_model = RidgeCV(alphas=(1.38), scoring='neg_mean_absolute_error')
+ridge_cv_model.fit(X_train, y_train)
+
+y_pred = ridge_cv_model.predict(X_test)
+
+mse_R = mean_squared_error(y_test, y_pred)
+rmse_R = mean_squared_error(y_test, y_pred, squared=False)
+mae_R = mean_absolute_error(y_test, y_pred)
+r2_R = r2_score(y_test, y_pred)
+
+elastic_model = ElasticNetCV(l1_ratio=[0.01], tol=0.01)
+elastic_model.fit(X_train, y_train)
+
+y_pred = elastic_model.predict(X_test)
+
+mse_E = mean_squared_error(y_test, y_pred)
+rmse_E = mean_squared_error(y_test, y_pred, squared=False)
+mae_E = mean_absolute_error(y_test, y_pred)
+r2_E = r2_score(y_test, y_pred)
+
+from sklearn.neighbors import KNeighborsRegressor
+knn = KNeighborsRegressor(n_neighbors=10)
+
+knn.fit(X_train,y_train)
+y_pred = knn.predict(X_test)
+
+mse_KNN = mean_squared_error(y_test, y_pred)
+rmse_KNN = mean_squared_error(y_test, y_pred, squared=False)
+mae_KNN = mean_absolute_error(y_test, y_pred)
+r2_KNN = r2_score(y_test, y_pred)
+
+results = {
+    'Decision Tree': {'MSE': mse_DT, 'RMSE': rmse_DT, 'MAE': mae_DT, 'R^2': r2_DT},
+    'Random Forest': {'MSE': mse_RF, 'RMSE': rmse_RF, 'MAE': mae_RF, 'R^2': r2_RF},
+    'Gradient Boosting': {'MSE': mse_GD, 'RMSE': rmse_GD, 'MAE': mae_GD, 'R^2': r2_GD},
+    'Ridge CV': {'MSE': mse_R, 'RMSE': rmse_R, 'MAE': mae_R, 'R^2': r2_R},
+    'ElasticNet CV': {'MSE': mse_E, 'RMSE': rmse_E, 'MAE': mae_E, 'R^2': r2_E},
+    'KNN': {'MSE': mse_KNN, 'RMSE': rmse_KNN, 'MAE': mae_KNN, 'R^2': r2_KNN},
+}
+
+# Convert dictionary into dataframe
+data = pd.DataFrame.from_dict(results, orient='index')
+data = data.applymap(lambda x: f'{x:.2f}')
+# Print the dataframe
+print(data)
+
+from sklearn.ensemble import VotingRegressor
+
+
+# Create an ensemble model using VotingRegressor
+ensemble_model = VotingRegressor(estimators=[
+    ('random_forest', model_RF),
+    ('knn', knn),
+    ('Ridge CV',ridge_cv_model)
+])
+
+# Train the ensemble model using training data
+ensemble_model.fit(X_train, y_train)
+
+# Make predictions using testing data
+y_pred_ensemble = ensemble_model.predict(X_test)
+
+# Calculate the average error values using different metrics
+mse_ensemble = mean_squared_error(y_test, y_pred_ensemble)
+rmse_ensemble = mean_squared_error(y_test, y_pred_ensemble, squared=False)
+mae_ensemble = mean_absolute_error(y_test, y_pred_ensemble)
+r2_ensemble = r2_score(y_test, y_pred_ensemble)
+
+print("Ensemble Model Metrics:")
+print("Mean Squared Error (MSE):", mse_ensemble)
+print("Root Mean Squared Error (RMSE):", rmse_ensemble)
+print("Mean Absolute Error (MAE):", mae_ensemble)
+print("R-squared (R2):", r2_ensemble)
+
+
